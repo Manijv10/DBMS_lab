@@ -65,3 +65,40 @@ RecId BlockAccess::linearSearch(int relId, char attrName[ATTR_SIZE], union Attri
 
     return RecId({-1, -1});
 }
+
+/*
+int BlockAccess::renameRelation(char oldName[ATTR_SIZE],char newName[ATTR_SIZE]){
+    RelCacheTable::resetSearchIndex(RELCAT_RELID);
+    
+    Attribute newRelationName;
+    strcpy(newRelationName.sVal,newName);
+
+    char * relcatrelname;
+    strcpy(relcatrelname,RELCAT_ATTR_RELNAME);
+    RecId relId=BlockAccess::linearSearch(RELCAT_RELID,relcatrelname,newRelationName,EQ);
+    if(relId.block != -1 && relId.slot != -1){
+        return E_RELEXIST;
+    }
+    RelCacheTable::resetSearchIndex(RELCAT_RELID);
+
+    Attribute oldRelationName;
+    strcpy(oldRelationName.sVal,oldName);
+
+    char * relcatrelname;
+    strcpy(relcatrelname,RELCAT_ATTR_RELNAME);
+    RecId relId=BlockAccess::linearSearch(RELCAT_RELID,relcatrelname,oldRelationName,EQ);
+    if(relId.block == -1 && relId.slot == -1){
+        return E_RELNOTEXIST;
+    }
+
+    Attribute record[RELCAT_NO_ATTRS];
+    RecBuffer RelcatBuffer(RELCAT_BLOCK);
+    RelcatBuffer.getRecord(record,relId.slot);
+   
+
+
+
+
+///not COMPLETE
+}
+*/
