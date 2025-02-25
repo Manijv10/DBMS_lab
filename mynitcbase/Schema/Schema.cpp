@@ -3,7 +3,6 @@
 #include <cstring>
 #include <ostream>
 #include <iostream>
-/* stage 6
 int Schema::openRel(char relName[ATTR_SIZE]) {
     int ret = OpenRelTable::openRel(relName);
    
@@ -35,7 +34,7 @@ int Schema::openRel(char relName[ATTR_SIZE]) {
     return OpenRelTable::closeRel(relId);
   }
   
-
+/* stage 6
   int renameRel(char oldRelName[ATTR_SIZE],char newRelName[ATTR_SIZE]){
     if(strcmp(oldRelName,RELCAT_RELNAME) == 0 || strcmp(newRelName,RELCAT_RELNAME) == 0 || strcmp(oldRelName,ATTRCAT_RELNAME) == 0 || strcmp(newRelName,ATTRCAT_RELNAME) == 0){
       return E_NOTPERMITTED;
