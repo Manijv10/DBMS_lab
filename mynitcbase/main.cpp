@@ -3,56 +3,29 @@
 #include "Disk_Class/Disk.h"
 #include "FrontendInterface/FrontendInterface.h"
 #include <iostream>
-#include <string.h>
-int main(int argc,char *argv[]){
+
+
+int main(int argc, char *argv[]){
   Disk disk_run;
-  StaticBuffer buffer; //constructors //ensure the disk comstructor comes before the staticbuffer constructor
-  RecBuffer relCatBuffer(RELCAT_BLOCK);
-  RecBuffer attrCatBuffer(ATTRCAT_BLOCK);
+  StaticBuffer buffer;
+  //update_names();
+  OpenRelTable cache;
 
-  HeadInfo relCatHeader;
-  HeadInfo attrCatHeader;
-
-  relCatBuffer.getHeader(&relCatHeader);
-  attrCatBuffer.getHeader(&attrCatHeader);
-
-  for (int i = 0; i < relCatHeader.numEntries; i++)
-  {
-
-    Attribute relCatRecord[RELCAT_NO_ATTRS];
-    relCatBuffer.getRecord(relCatRecord, i);
-        
-
-    printf("Relation: %s\n", relCatRecord[RELCAT_REL_NAME_INDEX].sVal);
-
-    for (int j = 0; j < attrCatHeader.numEntries; j++)
-    {
-      Attribute attrCatRecord[ATTRCAT_NO_ATTRS];
-      attrCatBuffer.getRecord(attrCatRecord, j);
-
-      if (strcmp(attrCatRecord[ATTRCAT_REL_NAME_INDEX].sVal,relCatRecord[RELCAT_REL_NAME_INDEX].sVal) == 0) { //DO NOT WRITE [ATTRCAT_ATTR_NAME_INDEX]
-
-      if(strcmp(attrCatRecord[ATTRCAT_REL_NAME_INDEX].sVal,"Student")==0){
-      if(strcmp(attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal,"Class")==0){
-      	strcpy(attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal,"Batch");
-      }
-      }
-      
-      const char *attrType = attrCatRecord[ATTRCAT_ATTR_TYPE_INDEX].nVal == NUMBER ? "NUM" : "STR";
-      printf("  %s: %s\n", attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal, attrType);
-      if (j == (attrCatHeader.numSlots) - 1 && attrCatHeader.rblock != -1)
-      { // that is it crossed one block
-          attrCatBuffer = RecBuffer(attrCatHeader.rblock);
-          attrCatBuffer.getHeader(&attrCatHeader);
- 		      j=-1;
-      }
-          
-      }
-      }
-        
-      printf("\n");
-   }
-    
-
-  return 0;
+  for(int i=0;i<=2;i++){
+    RelCatEntry relCatEntry;
+    int getRelResult = RelCacheTable::getRelCatEntry(i,&relCatEntry);
+   if(getRelResult == SUCCESS){
+    printf("Relation: %s\n",relCatEntry.relName);
+    for(int j=0;j<relCatEntry.numAttrs;j++){
+        AttrCatEntry attrcatEntry;
+        int getAttrResult = AttrCacheTable::getAttrCatEntry(i,j,&attrcatEntry);
+        if(getAttrResult == SUCCESS){
+            const char* attrType = attrcatEntry.attrType== NUMBER ? "NUM" : "STR";
+            printf(" %s: %s\n", attrcatEntry.attrName, attrType); 
+        }
+    }
+  }
+  printf("\n");
+}
+return 0;
 }
