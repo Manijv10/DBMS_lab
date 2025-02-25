@@ -3,7 +3,7 @@
 #include <cstring>
 #include <ostream>
 #include <iostream>
-
+/* stage 6
 int Schema::openRel(char relName[ATTR_SIZE]) {
     int ret = OpenRelTable::openRel(relName);
    
@@ -62,3 +62,4 @@ int relId=OpenRelTable::getRelId(relName);
   int retVal=BlockAccess::renameAttribute(relName,oldAttrName,newAttrName);
   return retVal;
 }
+*/
