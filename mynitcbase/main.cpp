@@ -4,63 +4,55 @@
 #include "FrontendInterface/FrontendInterface.h"
 #include <iostream>
 #include <string.h>
+int main(int argc,char *argv[]){
+  Disk disk_run;
+  StaticBuffer buffer; //constructors //ensure the disk comstructor comes before the staticbuffer constructor
+  RecBuffer relCatBuffer(RELCAT_BLOCK);
+  RecBuffer attrCatBuffer(ATTRCAT_BLOCK);
 
-int main(int argc, char *argv[])
-{
-    Disk disk_run;
+  HeadInfo relCatHeader;
+  HeadInfo attrCatHeader;
 
-    RecBuffer relCatBuffer(RELCAT_BLOCK);
-    RecBuffer attrCatBuffer(ATTRCAT_BLOCK);
+  relCatBuffer.getHeader(&relCatHeader);
+  attrCatBuffer.getHeader(&attrCatHeader);
 
-    HeadInfo relCatHeader;
-    HeadInfo attrCatHeader;
+  for (int i = 0; i < relCatHeader.numEntries; i++)
+  {
 
-    relCatBuffer.getHeader(&relCatHeader);
-    attrCatBuffer.getHeader(&attrCatHeader);
+    Attribute relCatRecord[RELCAT_NO_ATTRS];
+    relCatBuffer.getRecord(relCatRecord, i);
+        
 
-    for (int i = 0; i < relCatHeader.numEntries; i++)
+    printf("Relation: %s\n", relCatRecord[RELCAT_REL_NAME_INDEX].sVal);
+
+    for (int j = 0; j < attrCatHeader.numEntries; j++)
     {
+      Attribute attrCatRecord[ATTRCAT_NO_ATTRS];
+      attrCatBuffer.getRecord(attrCatRecord, j);
 
-        Attribute relCatRecord[RELCAT_NO_ATTRS];
-        relCatBuffer.getRecord(relCatRecord, i);
-        
+      if (strcmp(attrCatRecord[ATTRCAT_REL_NAME_INDEX].sVal,relCatRecord[RELCAT_REL_NAME_INDEX].sVal) == 0) { //DO NOT WRITE [ATTRCAT_ATTR_NAME_INDEX]
 
-        printf("Relation: %s\n", relCatRecord[RELCAT_REL_NAME_INDEX].sVal);
-
-        for (int j = 0; j < attrCatHeader.numEntries; j++)
-        {
-            Attribute attrCatRecord[ATTRCAT_NO_ATTRS];
-            attrCatBuffer.getRecord(attrCatRecord, j);
-
-            if (strcmp(attrCatRecord[ATTRCAT_REL_NAME_INDEX].sVal,relCatRecord[RELCAT_REL_NAME_INDEX].sVal) == 0) { //DO NOT WRITE [ATTRCAT_ATTR_NAME_INDEX]
-      		if(strcmp(attrCatRecord[ATTRCAT_REL_NAME_INDEX].sVal,"Student")==0){
-      			if(strcmp(attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal,"Class")==0){
-      				strcpy(attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal,"Batch");
-      			}
-      		}
-      		if(strcmp(attrCatRecord[ATTRCAT_REL_NAME_INDEX].sVal,"Events")==0){
-      			if(strcmp(attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal,"location")==0){
-      				strcpy(attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal,"CT");
-      			}
-      		}
-      		
-
-      		
-                const char *attrType = attrCatRecord[ATTRCAT_ATTR_TYPE_INDEX].nVal == NUMBER ? "NUM" : "STR";
-                printf("  %s: %s\n", attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal, attrType);
-                if (j == (attrCatHeader.numSlots) - 1 && attrCatHeader.rblock != -1)
-                { // that is it crossed one block
-                    attrCatBuffer = RecBuffer(attrCatHeader.rblock);
-                    attrCatBuffer.getHeader(&attrCatHeader);
- 		            j=-1;
-                }
+      if(strcmp(attrCatRecord[ATTRCAT_REL_NAME_INDEX].sVal,"Student")==0){
+      if(strcmp(attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal,"Class")==0){
+      	strcpy(attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal,"Batch");
+      }
+      }
+      
+      const char *attrType = attrCatRecord[ATTRCAT_ATTR_TYPE_INDEX].nVal == NUMBER ? "NUM" : "STR";
+      printf("  %s: %s\n", attrCatRecord[ATTRCAT_ATTR_NAME_INDEX].sVal, attrType);
+      if (j == (attrCatHeader.numSlots) - 1 && attrCatHeader.rblock != -1)
+      { // that is it crossed one block
+          attrCatBuffer = RecBuffer(attrCatHeader.rblock);
+          attrCatBuffer.getHeader(&attrCatHeader);
+ 		      j=-1;
+      }
           
-           }
-        }
+      }
+      }
         
-        printf("\n");
+      printf("\n");
    }
     
 
-    return 0;
+  return 0;
 }
