@@ -43,5 +43,44 @@ void RelCacheTable::recordToRelCatEntry(union Attribute record[RELCAT_NO_ATTRS],
       RELCAT_NO_SLOTS_PER_BLOCK_INDEX
   */
 }
+int RelCacheTable::getSearchIndex(int relId,RecId* searchIndex){
+   if(relId < 0 || relId >= MAX_OPEN){
+     return E_OUTOFBOUND;
+   }
+   if(relCache[relId]==nullptr){
+     return E_RELNOTOPEN;
+   }
+   // copy the searchIndex field of the Relation Cache entry corresponding
+  //   to input relId to the searchIndex variable.
+   *searchIndex = relCache[relId]->searchIndex;
+   return SUCCESS;
+}
 
+int RelCacheTable::setSearchIndex(int relId, RecId* searchIndex){
+  if(relId < 0 || relId >= MAX_OPEN){
+     return E_OUTOFBOUND;
+  }
+  if(relCache[relId] == nullptr){
+     return E_RELNOTOPEN;
+  }
+    // relId=relCache->searchIndex++;
+    relCache[relId]->searchIndex = *searchIndex;
+    return SUCCESS;
+  
+}
+
+int RelCacheTable::resetSearchIndex(int relId){
+  if(relId < 0 || relId >= MAX_OPEN)
+    return E_OUTOFBOUND;
+    // check if relCache[relId] == nullptr and return E_RELNOTOPEN if true
+   if(RelCacheTable::relCache[relId] == nullptr)
+        return E_RELNOTOPEN;
+
+  //use setSearchIndex to set the search index to {-1, -1}
+  //RelCacheTable::relCache[relId]->searchIndex = {-1,1};
+  relCache[relId]->searchIndex.block = -1;
+  relCache[relId]->searchIndex.slot = -1;
+  return SUCCESS;
+  
+}
 
