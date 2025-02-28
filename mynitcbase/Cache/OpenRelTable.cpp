@@ -141,7 +141,7 @@ and open the appropriate one.
 //getrelId function
 int OpenRelTable::getRelId(char relName[ATTR_SIZE]){
     for(int i=0;i<MAX_OPEN;i++){
-        if(tableMetaInfo[i].relName==relName){
+        if(strcmp(tableMetaInfo[i].relName, relName) == 0){
             std::cout << "The value of relid is: " << i<< std::endl;
   
             return i;
