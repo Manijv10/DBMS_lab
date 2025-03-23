@@ -8,7 +8,8 @@ RelCacheEntry* RelCacheTable::relCache[MAX_OPEN];
     Get the relation catalog entry for the relation with rel-id 'relId' from the cache
     NOTE: this function expects the caller to allocate memory for '*relCatBuf'
 */
-int RelCacheTable::getRelCatEntry(int relId, RelCatEntry* relCatBuf){
+
+int RelCacheTable::getRelCatEntry(int relId,RelCatEntry* relCatBuf){
     if(relId < 0 || relId >= MAX_OPEN){
         return E_OUTOFBOUND;
     }

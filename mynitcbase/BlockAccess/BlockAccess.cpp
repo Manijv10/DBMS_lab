@@ -1,5 +1,4 @@
 
-//////////////////////stage 8/////////////////////////////
 
 #include "BlockAccess.h"
 
@@ -618,6 +617,113 @@ int BlockAccess::deleteRelation(char relName[ATTR_SIZE]){
     RelCacheTable::getRelCatEntry(ATTRCAT_RELID, &attrCatEntry);
     attrCatEntry.numRecs -= numberOfAttributesDeleted;
     RelCacheTable::setRelCatEntry(ATTRCAT_RELID, &attrCatEntry);
+
+    return SUCCESS;
+}
+
+/*
+NOTE: the caller is expected to allocate space for the argument `record` based
+      on the size of the relation. This function will only copy the result of
+      the projection onto the array pointed to by the argument.
+*/
+int BlockAccess::project(int relId, Attribute *record) {
+    // get the previous search index of the relation relId from the relation
+    // cache (use RelCacheTable::getSearchIndex() function)
+    RecId searchindex;
+    RelCacheTable::getSearchIndex(relId,&searchindex);
+    // declare block and slot which will be used to store the record id of the
+    // slot we need to check.
+    int block, slot;
+
+    /* if the current search index record is invalid(i.e. = {-1, -1})
+       (this only happens when the caller reset the search index)
+    */
+    if (searchindex.block == -1 && searchindex.slot == -1)
+    {
+        // (new project operation. start from beginning)
+
+        // get the first record block of the relation from the relation cache
+        // (use RelCacheTable::getRelCatEntry() function of Cache Layer)
+
+        //slot and block are record ids of what we want to project
+        RelCatEntry relcatbuff;
+        int ret = RelCacheTable::getRelCatEntry(relId,&relcatbuff);
+        if(ret !=SUCCESS){
+            return ret;
+        }
+        block=relcatbuff.firstBlk;
+        slot=0;
+        
+    }
+    else
+    {
+        // (a project/search operation is already in progress)
+        block=searchindex.block;
+        slot=searchindex.slot+1;
+
+        // block = previous search index's block
+        // slot = previous search index's slot + 1
+    }
+
+
+    // The following code finds the next record of the relation
+    /* Start from the record id (block, slot) and iterate over the remaining
+       records of the relation */
+    while (block != -1)
+    {
+        // create a RecBuffer object for block (using appropriate constructor!)
+        RecBuffer buffer(block);
+        struct HeadInfo head;
+        buffer.getHeader(&head);
+        unsigned char  slotmap[head.numSlots];
+        buffer.getSlotMap(slotmap);
+        int numslots=head.numSlots;
+        
+
+        //If slot >=no of slots per blk then ut means no more slots in this block therefore go to the next block if rblock exists.Else block=-1;
+        if(slot>=numslots)
+        {
+            
+            if(head.rblock !=-1){
+            block=head.rblock;
+            slot=0;
+            }
+            else{
+                block=-1;
+                break;
+            }
+            // update slot = 0
+            // (NOTE: if this is the last block, rblock would be -1. this would
+            //        set block = -1 and fail the loop condition )
+        }
+        else if (slotmap[slot]==SLOT_UNOCCUPIED)
+        { // (i.e slot-th entry in slotMap contains SLOT_UNOCCUPIED)
+            slot++;
+            // increment slot
+        }
+        else {
+            // (the next occupied slot / record has been found)
+            break;
+        }
+    }
+
+    if (block == -1){
+        // (a record was not found. all records exhausted)
+        return E_NOTFOUND;
+    }
+
+    // declare nextRecId to store the RecId of the record found
+    RecId foundRecId{block, slot};
+    RelCacheTable::setSearchIndex(relId,&foundRecId);
+    // set the search index to nextRecId using RelCacheTable::setSearchIndex
+
+    /* Copy the record with record id (foundRecId) to the record buffer (record)
+       For this Instantiate a RecBuffer class object by passing the recId and
+       call the appropriate method to fetch the record
+    */
+    RecBuffer newbuffer(foundRecId.block);
+    newbuffer.getRecord(record,foundRecId.slot);
+
 
     return SUCCESS;
 }
