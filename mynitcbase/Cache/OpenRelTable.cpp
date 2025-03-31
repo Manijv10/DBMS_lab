@@ -310,7 +310,6 @@ int OpenRelTable::openRel(char relName[ATTR_SIZE]){
 
 }
 
-
 int OpenRelTable::closeRel(int relId){
     if(relId == RELCAT_RELID || relId == ATTRCAT_RELID){
         return E_NOTPERMITTED;
@@ -338,6 +337,13 @@ int OpenRelTable::closeRel(int relId){
     AttrCacheEntry *entry, *temp;
     entry = AttrCacheTable::attrCache[relId];
     while(entry!= nullptr){
+        if(entry->dirty){
+            Attribute record[ATTRCAT_NO_ATTRS];
+            AttrCacheTable::attrCatEntryToRecord(&entry->attrCatEntry, record);
+            RecBuffer attrCatBlock(entry->recId.block);
+            attrCatBlock.setRecord(record, entry->recId.slot);
+        }
+        
         temp = entry;
         entry = entry->next;
         free(temp);
@@ -353,4 +359,4 @@ int OpenRelTable::closeRel(int relId){
     return SUCCESS;
     
 }
-  
+

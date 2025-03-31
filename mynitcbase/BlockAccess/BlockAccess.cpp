@@ -414,10 +414,30 @@ int BlockAccess::insert(int relId, Attribute *record){
     relCatEntry.numRecs += 1;
     RelCacheTable::setRelCatEntry(relId, &relCatEntry);
 
-    return SUCCESS;
-    
-}
+    /* B+ Tree Insertion*/
+    int flag = SUCCESS;
 
+    // iterate over all the attributes of the relation
+    for(int i = 0; i < relCatEntry.numAttrs; i++){
+
+        // get the attribute catalog for the ith atribute
+        AttrCatEntry attrCatEntry;
+        AttrCacheTable::getAttrCatEntry(relId, i, &attrCatEntry);
+
+        // check if index for this attribute is created or not [check rootBlock]
+        if(attrCatEntry.rootBlock != -1){
+            // then insert into the B+ tree
+            int retVal = BPlusTree::bPlusInsert(relId, attrCatEntry.attrName, record[i], rec_id);
+
+            if(retVal == E_DISKFULL){
+                flag = E_INDEX_BLOCKS_RELEASED;
+            }
+        }
+
+    }
+
+    return flag;
+}
 
 /*
     NOTE: This function will copy the result of the search to the 'record' argument.
@@ -484,7 +504,7 @@ int BlockAccess::deleteRelation(char relName[ATTR_SIZE]){
     Attribute relNameAttr;
     strcpy(relNameAttr.sVal, relName);
 
-    char relCatAttrRelname[]=RELCAT_ATTR_RELNAME;
+    char relCatAttrRelname[ATTR_SIZE]=RELCAT_ATTR_RELNAME;
 
     // linearSearch on the relation catalog for RelName = relName
     RecId recId = BlockAccess::linearSearch(RELCAT_RELID, relCatAttrRelname, relNameAttr,EQ);
@@ -542,7 +562,7 @@ int BlockAccess::deleteRelation(char relName[ATTR_SIZE]){
         recBuffer.getRecord(record, attrCatRecId.slot);
         
         // declare the rootBlock which will be used to store the root block field from the attribute catalog record.
-        // int rootBlock = /* get root block from the record */
+        int rootBlock =  record[ATTRCAT_ROOT_BLOCK_INDEX].nVal;  /* get root block from the record */
 
         // update the SlotMap for the block by setting the slot as SLOT_UNOCCUPIED
         unsigned char slotMap[head.numSlots];
@@ -602,6 +622,10 @@ int BlockAccess::deleteRelation(char relName[ATTR_SIZE]){
         }
 
         // next part is for later stages.
+        /* For deleting B+ Trees */
+        if(rootBlock != -1){
+            BPlusTree::bPlusDestroy(rootBlock);
+        }
           
     }
 
@@ -637,6 +661,8 @@ int BlockAccess::deleteRelation(char relName[ATTR_SIZE]){
 
     return SUCCESS;
 }
+
+
 
 /*
     Project(): is used to fetch one record of the relation. Each subsequent call would retuen the next record
