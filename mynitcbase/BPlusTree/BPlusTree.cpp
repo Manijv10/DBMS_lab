@@ -1,201 +1,231 @@
 #include "BPlusTree.h"
 
 #include <cstring>
+#include "BPlusTree.h"
+#include<iostream>
+#include <cstring>
+using namespace std;
 
 
-RecId BPlusTree::bPlusSearch(int relId, char attrName[ATTR_SIZE], Attribute attrVal, int op){
-    
-    // Declare the searchIndex which will be used to store search index for attrName.
+
+RecId BPlusTree::bPlusSearch(int relId, char attrName[ATTR_SIZE], Attribute attrVal, int op) {
+
+    // declare searchIndex which will be used to store search index for attrName.
     IndexId searchIndex;
 
-    // get the search index corresponding to attribute with name attrName
-    AttrCacheTable::getSearchIndex(relId, attrName, &searchIndex);
+    /* get the search index corresponding to attribute with name attrName
+       using AttrCacheTable::getSearchIndex(). */
+    AttrCacheTable::getSearchIndex(relId,attrName,&searchIndex);
 
-    // get the attrCatEntry
     AttrCatEntry attrCatEntry;
-    AttrCacheTable::getAttrCatEntry(relId, attrName, &attrCatEntry);
+    /* load the attribute cache entry into attrCatEntry using
+     AttrCacheTable::getAttrCatEntry(). */
+    AttrCacheTable::getAttrCatEntry(relId,attrName,&attrCatEntry);
 
     // declare variables block and index which will be used during search
     int block, index;
 
-    // if search is done first time, i.e searchIndex = {-1, -1}
-    if(searchIndex.block == -1 && searchIndex.index == -1){
-        
-        // start the search from the first entry of the root
+    if (searchIndex.block==-1 && searchIndex.index==-1) {
+        // (search is done for the first time)
+
+        // start the search from the first entry of root.
         block = attrCatEntry.rootBlock;
         index = 0;
 
-        // if attrName doesn't have a B+ tree
-        if(block == -1){
-            return RecId{-1,-1};
+        if (block==-1) {
+            return RecId{-1, -1};
         }
-    }
-    else{
-        /*
-            a valid searchIndex points to an entry in the leaf index of the attribute's
-            B+ Tree which had previously satisfied the op for the given attrVal.
-        */
-        
-        block = searchIndex.block;
-        index = searchIndex.index + 1; // search is resumed from the next index
 
-        // load block into leaf
+    } else {
+        /*a valid searchIndex points to an entry in the leaf index of the attribute's
+        B+ Tree which had previously satisfied the op for the given attrVal.*/
+
+        block = searchIndex.block;
+        index = searchIndex.index + 1;  // search is resumed from the next index.
+
+        // load block into leaf using IndLeaf::IndLeaf().
         IndLeaf leaf(block);
 
-        // declare leafHead which will store the header of the leaf. Load the header
+        // declare leafHead which will be used to hold the header of leaf.
         HeadInfo leafHead;
+
+        // load header into leafHead using BlockBuffer::getHeader().
         leaf.getHeader(&leafHead);
 
-        // if the index is more than the no. of entries, search in the next leaf
-        if(index >= leafHead.numEntries){
-            block = leafHead.rblock;
+        if (index >= leafHead.numEntries) {
+            /* (all the entries in the block has been searched; search from the
+            beginning of the next leaf index block. */
 
-            if(block == -1){
-                // end od the linklist - search is done
+            // update block to rblock of current block and index to 0.
+            block=leafHead.rblock;
+            index=0;
+
+            if (block == -1) {
+                // (end of linked list reached - the search is done.)
                 return RecId{-1, -1};
             }
         }
     }
 
-    /**** Traverse through all the internal nodes ****/
-    /*
-        NOTE:
-            - This section is needed when search starts from the root, (root is not leaf)
+    /**  Traverse through all the internal nodes according to value
+             of attrVal and the operator op                             **/
 
-            If there was valid search index, then we are already at a leaf block, thus this section's fails in loop.
+    /* (This section is only needed when
+        - search restarts from the root block (when searchIndex is reset by caller)
+        - root is not a leaf
+        If there was a valid search index, then we are already at a leaf block
+        and the test condition in the following loop will fail)
     */
+    /* block is of type IND_INTERNAL */
+    while(StaticBuffer::getStaticBlockType(block)==IND_INTERNAL) {  //use StaticBuffer::getStaticBlockType()
 
-    while(StaticBuffer::getStaticBlockType(block) == IND_INTERNAL){
-        
-        // load the block into internalBlk and get the block header
+        // load the block into internalBlk using IndInternal::IndInternal().
         IndInternal internalBlk(block);
+
         HeadInfo intHead;
+
+        // load the header of internalBlk into intHead using BlockBuffer::getHeader()
         internalBlk.getHeader(&intHead);
 
-        // declare the intEntry which will be used to store entry of internalBlk.
+        // declare intEntry which will be used to store an entry of internalBlk.
         InternalEntry intEntry;
-
-        if(op == NE || op == LT || op == LE){
+        /* op is one of NE, LT, LE */
+        if (op==NE || op==LT || op==LE) {
             /*
-                - NE: need to search the entire linked list of leaf indices of the B+ Tree,
-                starting from the leftmost leaf index. Thus, always move to the left.
+            - NE: need to search the entire linked list of leaf indices of the B+ Tree,
+            starting from the leftmost leaf index. Thus, always move to the left.
 
-                - LE or LT: the attribute values are arranged in ascending order in the
-                leaf indices of the B+ Tree. Values that satisfy these conditions, if any
-                exist, will be found in the left-most leaf index. Thus, always move to the
-                left.
+            - LT and LE: the attribute values are arranged in ascending order in the
+            leaf indices of the B+ Tree. Values that satisfy these conditions, if
+            any exist, will always be found in the left-most leaf index. Thus,
+            always move to the left.
             */
 
-            // load entry of first slot of the block into intEntry
-            internalBlk.getEntry(&intEntry, 0);
+            // load entry in the first slot of the block into intEntry
+            // using IndInternal::getEntry().
+            internalBlk.getEntry(&intEntry,0);
             block = intEntry.lChild;
 
-        }
-        else{
-
+        } else {
             /*
-                - EQ, GT, GE: move to the left child of the first entry that is greater
-                than (or equal to) attrVal
-
-                We are trying to find the first entry that satisfies the condition.
-                Since the values are in ascending order we move to the left child which
-                might contain more entries that satisfy the condition
+            - EQ, GT and GE: move to the left child of the first entry that is
+            greater than (or equal to) attrVal
+            (we are trying to find the first entry that satisfies the condition.
+            since the values are in ascending order we move to the left child which
+            might contain more entries that satisfy the condition)
             */
 
             /*
-                Traverse through all entries of the internalBlk and find an entry that
-                satisfies the condition:
-                a) If op == EQ or GE, then intEntry.attrVal >= attrVal
-                b) If op == GT, then intEntry.attrVal > attrVal
+             traverse through all entries of internalBlk and find an entry that
+             satisfies the condition.
+             if op == EQ or GE, then intEntry.attrVal >= attrVal
+             if op == GT, then intEntry.attrVal > attrVal
+             Hint: the helper function compareAttrs() can be used for comparing
             */
-            bool found = false;
-            for(int i = 0; i < intHead.numEntries; i++){
-                internalBlk.getEntry(&intEntry, i);
-                int compareVal = compareAttrs(intEntry.attrVal, attrVal, attrCatEntry.attrType);
-                if((compareVal >= 0 && (op == EQ || op == GE)) || (compareVal > 0 || op == GT)){
-                    found = true;
+            int slot = 0, found = 0;
+            while (slot < intHead.numEntries) {
+                internalBlk.getEntry(&intEntry, slot);
+                     // bs++;
+                int cmpVal = compareAttrs(intEntry.attrVal, attrVal, attrCatEntry.attrType);
+
+                if (
+                    (op == EQ && cmpVal == 0) ||
+                    (op == GE && cmpVal >= 0) ||
+                    (op == GT && cmpVal > 0)
+                ) {
+                    found = 1;
                     break;
                 }
+                
+                slot++;
             }
 
-            if(found){
-                // move to the left child of that block
-                block = intEntry.lChild;
-            }
-            else{
+            /* such an entry is found*/
+            if (found) {
+                // move to the left child of that entry
+                block =  intEntry.lChild;
+
+            } else {
                 // move to the right child of the last entry of the block
-                block = intEntry.rChild;
-            }
+                // i.e numEntries - 1 th entry of the block
 
+                block =  intEntry.rChild;
+            }
         }
     }
 
-    // NOTE: now our block will have the block number of the leaf index block.
+    // NOTE: block now has the block number of a leaf index block.
 
-    /***
-        Identify the first leaf index entry from the current position that satisfies our condition (moving right)
-     ***/
+    /**  Identify the first leaf index entry from the current position
+                that satisfies our condition (moving right)             **/
 
-     while(block != -1){
-
-        // load the block into leafBlk and get the header
+    while (block != -1) {
+        // load the block into leafBlk using IndLeaf::IndLeaf().
         IndLeaf leafBlk(block);
         HeadInfo leafHead;
+
+        // load the header to leafHead using BlockBuffer::getHeader().
         leafBlk.getHeader(&leafHead);
 
         // declare leafEntry which will be used to store an entry from leafBlk
         Index leafEntry;
 
-        while(index < leafHead.numEntries){
-            leafBlk.getEntry(&leafEntry, index);
+        //index < numEntries in leafBlk/
+        while (index<leafHead.numEntries) {
 
-            int cmpVal = compareAttrs(leafEntry.attrVal, attrVal, attrCatEntry.attrType);
+            // load entry corresponding to block and index into leafEntry
+            // using IndLeaf::getEntry().
+            leafBlk.getEntry(&leafEntry,index);
 
-            if(
+            /* comparison between leafEntry's attribute value and input attrVal using compareAttrs()*/ 
+            int cmpVal = compareAttrs(leafEntry.attrVal,attrVal,attrCatEntry.attrType);
+          //  bs++;
+            if (
                 (op == EQ && cmpVal == 0) ||
                 (op == LE && cmpVal <= 0) ||
                 (op == LT && cmpVal < 0) ||
                 (op == GT && cmpVal > 0) ||
                 (op == GE && cmpVal >= 0) ||
                 (op == NE && cmpVal != 0)
-            ){
-                // entry satisfying the condition found, set search index
+            ) {
+                // (entry satisfying the condition found)
+
+                // set search index to {block, index}
                 searchIndex.block = block;
                 searchIndex.index = index;
-                AttrCacheTable::setSearchIndex(relId, attrName, &searchIndex);
+                AttrCacheTable::setSearchIndex(relId,attrName,&searchIndex);
+                // return the recId {leafEntry.block, leafEntry.slot}.
+                return RecId{leafEntry.block,leafEntry.slot};
 
-                return RecId{leafEntry.block, leafEntry.slot};
+            } else if ((op == EQ || op == LE || op == LT) && cmpVal > 0) {
+                /*future entries will not satisfy EQ, LE, LT since the values
+                    are arranged in ascending order in the leaves */
 
+                // return RecId {-1, -1};
+                return RecId{-1,-1};
             }
-            else if((op == EQ || op == LE || op == LT) && cmpVal > 0){
-                /*
-                    future entries will not satisfy EQ, LE, LT since the values
-                    are arranged in ascending order in the leaves
-                */
-                return RecId{-1, -1};
-            }
 
+            // search next index.
             ++index;
         }
 
-        /*
-            only for NE operation we have to check the entire linked list.
-            For all the other op it is guranteed that the block being searched will have an entry,
-            if it exist, satisfying that op
-        */
-        if(op != NE){
+        /*only for NE operation do we have to check the entire linked list;
+        for all the other op it is guaranteed that the block being searched
+        will have an entry, if it exists, satisying that op. */
+        if (op != NE) {
             break;
         }
 
-        block = leafHead.rblock;
-        index = 0;
+        // block = next block in the linked list, i.e., the rblock in leafHead.
+        // update index to 0.
+        block=leafHead.rblock;
+        index=0;
     }
 
-    // no entry satisfying the op was found; return {-1, -1}
-    return RecId{-1, -1};
+    // no entry satisying the op was found; return the recId {-1,-1}
+    return RecId{-1,-1};
 }
-
-
+//stage 11
 int BPlusTree::bPlusCreate(int relId, char attrName[ATTR_SIZE]) 
 {
     // if relId is either RELCAT_RELID or ATTRCAT_RELID:
@@ -203,7 +233,7 @@ int BPlusTree::bPlusCreate(int relId, char attrName[ATTR_SIZE])
     if (relId == RELCAT_RELID || relId == ATTRCAT_RELID)
         return E_NOTPERMITTED;
 
-    // get the attribute catalog entry of attribute `attrName`
+    // get the attribute catalog entry of attribute attrName
     // using AttrCacheTable::getAttrCatEntry()
     AttrCatEntry attrCatEntryBuffer;
     int ret = AttrCacheTable::getAttrCatEntry(relId, attrName, &attrCatEntryBuffer);
@@ -216,7 +246,7 @@ int BPlusTree::bPlusCreate(int relId, char attrName[ATTR_SIZE])
     if (attrCatEntryBuffer.rootBlock != -1)
         return SUCCESS;
 
-    /******Creating a new B+ Tree ******/
+    /***Creating a new B+ Tree ***/
 
     // get a free leaf block using constructor 1 to allocate a new block
     IndLeaf rootBlockBuf;
@@ -240,10 +270,10 @@ int BPlusTree::bPlusCreate(int relId, char attrName[ATTR_SIZE])
     RelCacheTable::getRelCatEntry(relId, &relCatEntryBuffer);
     int block = relCatEntryBuffer.firstBlk; // first record block of the relation 
 
-    /***** Traverse all the blocks in the relation and insert them one
-           by one into the B+ Tree *****/
+    /*** Traverse all the blocks in the relation and insert them one
+           by one into the B+ Tree ***/
     while (block != -1) {
-        // declare a RecBuffer object for `block` (using appropriate constructor)
+        // declare a RecBuffer object for block (using appropriate constructor)
         RecBuffer blockBuffer (block);
 
         // load the slot map into slotMap using RecBuffer::getSlotMap().
@@ -255,7 +285,7 @@ int BPlusTree::bPlusCreate(int relId, char attrName[ATTR_SIZE])
             if (slotmap[slot] == SLOT_OCCUPIED)
             {
                 Attribute record[relCatEntryBuffer.numAttrs];
-                // load the record corresponding to the slot into `record`
+                // load the record corresponding to the slot into record
                 // using RecBuffer::getRecord().
                 blockBuffer.getRecord(record, slot);
 
@@ -413,7 +443,7 @@ int BPlusTree::insertIntoLeaf(int relId, char attrName[ATTR_SIZE], int leafBlock
 
     /*
     Iterate through all the entries in the block and copy them to the array indices.
-    Also insert `indexEntry` at appropriate position in the indices array maintaining
+    Also insert indexEntry at appropriate position in the indices array maintaining
     the ascending order.
     - use IndLeaf::getEntry() to get the entry
     - use compareAttrs() declared in BlockBuffer.h to compare two Attribute structs
@@ -457,7 +487,7 @@ int BPlusTree::insertIntoLeaf(int relId, char attrName[ATTR_SIZE], int leafBlock
         blockHeader.numEntries++;
         leafBlock.setHeader(&blockHeader);
 
-        // iterate through all the entries of the array `indices` and populate the
+        // iterate through all the entries of the array indices and populate the
         // entries of block with them using IndLeaf::setEntry().
 
         for (int indicesIt = 0; indicesIt < blockHeader.numEntries; indicesIt++)
@@ -466,9 +496,9 @@ int BPlusTree::insertIntoLeaf(int relId, char attrName[ATTR_SIZE], int leafBlock
         return SUCCESS;
     }
 
-    // If we reached here, the `indices` array has more than entries than can fit
+    // If we reached here, the indices array has more than entries than can fit
     // in a single leaf index block. Therefore, we will need to split the entries
-    // in `indices` between two leaf blocks. We do this using the splitLeaf() function.
+    // in indices between two leaf blocks. We do this using the splitLeaf() function.
     // This function will return the blockNum of the newly allocated block or
     // E_DISKFULL if there are no more blocks to be allocated.
 
@@ -481,7 +511,7 @@ int BPlusTree::insertIntoLeaf(int relId, char attrName[ATTR_SIZE], int leafBlock
     // if (/* the current leaf block was not the root */) // check pblock in header
     if (blockHeader.pblock != -1)
     {
-        //TODO: insert the middle value from `indices` into the parent block using the
+        //TODO: insert the middle value from indices into the parent block using the
         //TODO: insertIntoInternal() function. (i.e the last value of the left block)
 
         //* the middle value will be at index 31 (given by constant MIDDLE_INDEX_LEAF)
@@ -582,176 +612,96 @@ int BPlusTree::splitLeaf(int leafBlockNum, Index indices[]) {
 }
 
 int BPlusTree::insertIntoInternal(int relId, char attrName[ATTR_SIZE], 
-                                    int intBlockNum, InternalEntry intEntry) {
-    // get the attribute cache entry corresponding to attrName
-    // using AttrCacheTable::getAttrCatEntry().
-    AttrCatEntry attrCatEntryBuffer;
-    AttrCacheTable::getAttrCatEntry(relId, attrName, &attrCatEntryBuffer);
+    int intBlockNum, InternalEntry intEntry) {
+// Get the attribute cache entry
+AttrCatEntry attrCatEntryBuffer;
+AttrCacheTable::getAttrCatEntry(relId, attrName, &attrCatEntryBuffer);
 
-    // declare intBlk, an instance of IndInternal using constructor 2 for the block
-    // corresponding to intBlockNum
-    IndInternal internalBlock (intBlockNum);
+// Initialize the internal block
+IndInternal internalBlock(intBlockNum);
 
-    HeadInfo blockHeader;
-    // load blockHeader with header of intBlk using BlockBuffer::getHeader().
-    internalBlock.getHeader(&blockHeader);
+// Load the block header
+HeadInfo blockHeader;
+internalBlock.getHeader(&blockHeader);
 
-    // declare internalEntries to store all existing entries + the new entry
-    InternalEntry internalEntries[blockHeader.numEntries + 1];
-
-    /*
-    Iterate through all the entries in the block and copy them to the array
-    `internalEntries`. Insert `indexEntry` at appropriate position in the
-    array maintaining the ascending order.
-        - use IndInternal::getEntry() to get the entry
-        - use compareAttrs() to compare two structs of type Attribute
-
-    Update the lChild of the internalEntry immediately following the newly added
-    entry to the rChild of the newly added entry.
-    */
-
-    // bool inserted = false;
-    int insertedIndex = -1;
-    for (int entryindex = 0; entryindex < blockHeader.numEntries; entryindex++)
-    {
-        InternalEntry internalBlockEntry;
-        internalBlock.getEntry(&internalBlockEntry, entryindex);
-
-        if (compareAttrs(internalBlockEntry.attrVal, intEntry.attrVal, attrCatEntryBuffer.attrType) <= 0)
-        {
-            // the new value is lesser (or equal to), hence does not go here
-            internalEntries[entryindex] = internalBlockEntry;
-        }
-        else 
-        {
-            // // setting the previous entry's rChild to the lChild of this entry
-            // if (entryindex > 0)
-            // {
-            //     internalBlock.getEntry(&internalBlockEntry, entryindex-1);
-            //     internalBlockEntry.rChild = intEntry.lChild;
-            // }
-
-            // setting the correct entry in `internalEntries`
-            internalEntries[entryindex] = intEntry;
-            insertedIndex = entryindex;
-
-            // // setting the following entry's lChild to the rChild of this entry
-            // internalBlock.getEntry(&internalBlockEntry, entryindex+1);
-            // internalBlockEntry.lChild = intEntry.rChild;
-
-            for (entryindex++; entryindex <= blockHeader.numEntries; entryindex++)
-            {
-                internalBlock.getEntry(&internalBlockEntry, entryindex-1);
-                internalEntries[entryindex] = internalBlockEntry;
-            }
-
-            break;
-        }
-    }
-
-    // inserting the last remaining entry, if any
-    //// internalEntries[blockHeader.numEntries] = inserted ? lastEntry : intEntry;
-    if (insertedIndex == -1) {
-        internalEntries[blockHeader.numEntries] = intEntry;
-        insertedIndex = blockHeader.numEntries;
-    }
-
-    // setting the previous entry's rChild to lChild of `intEntry`
-    if (insertedIndex > 0)
-    {
-        // InternalEntry entry;
-        // internalBlock.getEntry(&entry, insertedIndex-1);
-        internalEntries[insertedIndex-1].rChild = intEntry.lChild;
-    }
-
-    // setting the following entry's lChild to rChild of `intEntry`
-    if (insertedIndex < blockHeader.numEntries)
-    {
-        // InternalEntry entry;
-        // internalBlock.getEntry(&entry, insertedIndex+1);
-        internalEntries[insertedIndex+1].lChild = intEntry.rChild;
-    }
-
-
-    if (blockHeader.numEntries < MAX_KEYS_INTERNAL) {
-        // (internal index block has not reached max limit)
-
-        // increment blockheader.numEntries and update the header of intBlk
-        // using BlockBuffer::setHeader().
-        blockHeader.numEntries++;
-        internalBlock.setHeader(&blockHeader);
-
-        // iterate through all entries in internalEntries array and populate the
-        // entries of intBlk with them using IndInternal::setEntry().
-        for (int entryindex = 0; entryindex < blockHeader.numEntries; entryindex++)
-            internalBlock.setEntry(&internalEntries[entryindex], entryindex);
-
-        return SUCCESS;
-    }
-
-    // If we reached here, the `internalEntries` array has more than entries than
-    // can fit in a single internal index block. Therefore, we will need to split
-    // the entries in `internalEntries` between two internal index blocks. We do
-    // this using the splitInternal() function.
-    // This function will return the blockNum of the newly allocated block or
-    // E_DISKFULL if there are no more blocks to be allocated.
-
-    int newRightBlk = splitInternal(intBlockNum, internalEntries);
-
-    // if (/* splitInternal() returned E_DISKFULL */) 
-    if (newRightBlk == E_DISKFULL)
-    {
-        // Using bPlusDestroy(), destroy the right subtree, rooted at intEntry.rChild.
-        // This corresponds to the tree built up till now that has not yet been
-        // connected to the existing B+ Tree
-
-        BPlusTree::bPlusDestroy(intEntry.rChild);
-
-        return E_DISKFULL;
-    }
-
-    // if the current block was not the root  
-    if (blockHeader.pblock != -1) // (check pblock in header)
-    {  
-        // insert the middle value from `internalEntries` into the parent block
-        // using the insertIntoInternal() function (recursively).
-
-        // create a struct InternalEntry with lChild = current block, rChild = newRightBlk
-        // and attrVal = internalEntries[MIDDLE_INDEX_INTERNAL].attrVal
-        // and pass it as argument to the insertIntoInternalFunction as follows
-
-        InternalEntry middleEntry;
-        middleEntry.lChild = intBlockNum, middleEntry.rChild = newRightBlk;
-
-        // the middle value will be at index 50 (given by constant MIDDLE_INDEX_INTERNAL)
-        middleEntry.attrVal = internalEntries[MIDDLE_INDEX_INTERNAL].attrVal;
-
-        // insertIntoInternal(relId, attrName, parent of current block, new internal entry)
-        return insertIntoInternal(relId, attrName, blockHeader.pblock, middleEntry);
-        // // if (ret == E_DISKFULL) return E_DISKFULL;
-    } 
-    else 
-    {
-        // the current block was the root block and is now split. a new internal index
-        // block needs to be allocated and made the root of the tree.
-        // To do this, call the createNewRoot() function with the following arguments
-
-        return createNewRoot(relId, attrName, internalEntries[MIDDLE_INDEX_INTERNAL].attrVal, 
-                                intBlockNum, newRightBlk);
-
-
-        // createNewRoot(relId, attrName,
-        //               internalEntries[MIDDLE_INDEX_INTERNAL].attrVal,
-        //               current block, new right block)
-
-        //// if (ret == E_DISKFULL) return E_DISKFULL;
-    }
-
-    // if either of the above calls returned an error (E_DISKFULL), then return that
-    // else return SUCCESS
-    return SUCCESS;
+// Ensure valid number of entries
+if (blockHeader.numEntries < 0 || blockHeader.numEntries >= MAX_KEYS_INTERNAL) {
+return 0;
 }
 
+// Store all existing entries + the new entry
+InternalEntry internalEntries[blockHeader.numEntries + 1];
+
+int insertedIndex = -1;
+int entryindex;
+
+// Copy entries and insert new entry in sorted order
+for (entryindex = 0; entryindex < blockHeader.numEntries; entryindex++) {
+InternalEntry internalBlockEntry;
+internalBlock.getEntry(&internalBlockEntry, entryindex);
+
+if (compareAttrs(internalBlockEntry.attrVal, intEntry.attrVal, attrCatEntryBuffer.attrType) <= 0) {
+internalEntries[entryindex] = internalBlockEntry;
+} else {
+insertedIndex = entryindex;
+break;
+}
+}
+
+// Shift elements to make space for the new entry
+for (int i = blockHeader.numEntries; i > insertedIndex; i--) {
+internalEntries[i] = internalEntries[i - 1];
+}
+
+// Insert the new entry
+internalEntries[insertedIndex] = intEntry;
+
+// Update child pointers
+if (insertedIndex > 0) {
+internalEntries[insertedIndex - 1].rChild = intEntry.lChild;
+}
+if (insertedIndex < blockHeader.numEntries) {
+internalEntries[insertedIndex + 1].lChild = intEntry.rChild;
+}
+
+// Increment number of entries and update header
+blockHeader.numEntries++;
+internalBlock.setHeader(&blockHeader);
+
+// Set all entries in the internal block
+for (int i = 0; i < blockHeader.numEntries; i++) {
+internalBlock.setEntry(&internalEntries[i], i);
+}
+
+// Check if block is full
+if (blockHeader.numEntries >= MAX_KEYS_INTERNAL) {
+int newRightBlk = splitInternal(intBlockNum, internalEntries);
+if (newRightBlk == E_DISKFULL) {
+BPlusTree::bPlusDestroy(intEntry.rChild);
+return E_DISKFULL;
+}
+
+// Handle splitting for root and non-root cases
+if (blockHeader.pblock != -1) {
+InternalEntry middleEntry;
+middleEntry.lChild = intBlockNum;
+middleEntry.rChild = newRightBlk;
+middleEntry.attrVal = internalEntries[MIDDLE_INDEX_INTERNAL].attrVal;
+
+return insertIntoInternal(relId, attrName, blockHeader.pblock, middleEntry);
+} else {
+return createNewRoot(relId, attrName, internalEntries[MIDDLE_INDEX_INTERNAL].attrVal,
+ intBlockNum, newRightBlk);
+}
+}
+
+return SUCCESS;
+}
+
+ 
+
+          
+    
 int BPlusTree::splitInternal(int intBlockNum, InternalEntry internalEntries[]) 
 {
     // declare rightBlk, an instance of IndInternal using constructor 1 to obtain new
@@ -883,8 +833,8 @@ int BPlusTree::createNewRoot(int relId, char attrName[ATTR_SIZE], Attribute attr
 
     newRootBlock.setEntry(&internalentry, 0);
 
-    // declare BlockBuffer instances for the `lChild` and `rChild` blocks using
-    // appropriate constructor and update the pblock of those blocks to `newRootBlkNum`
+    // declare BlockBuffer instances for the lChild and rChild blocks using
+    // appropriate constructor and update the pblock of those blocks to newRootBlkNum
     // using BlockBuffer::getHeader() and BlockBuffer::setHeader()
     BlockBuffer leftChildBlock (lChild);
     BlockBuffer rightChildBlock (rChild);
@@ -899,7 +849,7 @@ int BPlusTree::createNewRoot(int relId, char attrName[ATTR_SIZE], Attribute attr
     leftChildBlock.setHeader(&leftChildHeader);
     rightChildBlock.setHeader(&rightChildHeader);
 
-    // update rootBlock = newRootBlkNum for the entry corresponding to `attrName`
+    // update rootBlock = newRootBlkNum for the entry corresponding to attrName
     // in the attribute cache using AttrCacheTable::setAttrCatEntry().
     attrCatEntryBuffer.rootBlock = newRootBlkNum;
     AttrCacheTable::setAttrCatEntry(relId, attrName,  &attrCatEntryBuffer);
@@ -908,7 +858,7 @@ int BPlusTree::createNewRoot(int relId, char attrName[ATTR_SIZE], Attribute attr
 }
 
 int BPlusTree::bPlusDestroy(int rootBlockNum) {
-    // if (/*rootBlockNum lies outside the valid range [0,DISK_BLOCKS-1]*/) 
+    // if (/rootBlockNum lies outside the valid range [0,DISK_BLOCKS-1]/) 
     if (rootBlockNum < 0 || rootBlockNum >= DISK_BLOCKS)
         return E_OUTOFBOUND;
 
